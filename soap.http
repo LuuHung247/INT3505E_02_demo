@@ -1,0 +1,91 @@
+
+POST http://localhost:5001/soap
+Content-Type: application/soap+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:user="http://user.com">
+  <soap:Header/>
+  <soap:Body>
+    <user:GetUsers/>
+  </soap:Body>
+</soap:Envelope>
+
+###
+
+POST http://localhost:5001/soap
+Content-Type: application/soap+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:user="http://user.com">
+  <soap:Header/>
+  <soap:Body>
+    <user:GetUser>
+      <user:UserID>2</user:UserID>
+    </user:GetUser>
+  </soap:Body>
+</soap:Envelope>
+
+###
+POST http://localhost:5001/soap
+Content-Type: application/soap+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:user="http://user.com">
+  <soap:Header/>
+  <soap:Body>
+    <user:CreateUser>
+      <user:Name>Hung</user:Name>
+      <user:Email>sinhvienuet@vnu.vnu.edu.vn</user:Email>
+    </user:CreateUser>
+  </soap:Body>
+</soap:Envelope>
+
+###
+
+POST http://localhost:5001/soap
+Content-Type: application/soap+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:user="http://user.com">
+  <soap:Header/>
+  <soap:Body>
+    <user:UpdateUserEmail>
+      <user:UserID>2</user:UserID>
+      <user:Email>sinhvienuet16@vnu.edu.vn</user:Email>
+    </user:UpdateUserEmail>
+  </soap:Body>
+</soap:Envelope>
+
+###
+
+
+POST http://localhost:5001/soap
+Content-Type: application/soap+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:user="http://user.com">
+  <soap:Header/>
+  <soap:Body>
+    <user:UpdateUser>
+      <user:UserID>3</user:UserID>
+      <user:Name>Hung Updated</user:Name>
+      <user:Email>hung.updated.sinhvienuet@vnu.edu.vn</user:Email>
+    </user:UpdateUser>
+  </soap:Body>
+</soap:Envelope>
+
+###
+
+
+POST http://localhost:5001/soap
+Content-Type: application/soap+xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:user="http://user.com">
+  <soap:Header/>
+  <soap:Body>
+    <user:DeleteUser>
+      <user:UserID>1</user:UserID>
+    </user:DeleteUser>
+  </soap:Body>
+</soap:Envelope>

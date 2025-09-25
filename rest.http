@@ -1,0 +1,46 @@
+### GET all users
+GET http://localhost:5001/users
+Accept: application/json
+
+###
+
+### GET single user
+GET http://localhost:5001/users/2
+Accept: application/json
+
+###
+
+### POST create user
+POST http://localhost:5001/users
+Content-Type: application/json
+
+{
+  "name": "Hung",
+  "email": "sinhvienuet@vnu.vnu.edu.vn"
+}
+
+###
+
+### PATCH update user email
+PATCH http://localhost:5001/users/2
+Content-Type: application/json
+
+{
+  "email": "sinhvienuet16@vnu.edu.vn"
+}
+
+###
+
+### PUT full update user
+PUT http://localhost:5001/users/3
+Content-Type: application/json
+
+{
+  "name": "Hung Updated",
+  "email": "hung.updated.sinhvienuet@vnu.edu.vn"
+}
+
+###
+
+### DELETE user
+DELETE http://localhost:5001/users/1
