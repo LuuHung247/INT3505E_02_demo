@@ -1,28 +1,32 @@
+
 ### GET all users
-GET http://localhost:5001/users
+GET http://localhost:5001/users HTTP/1.1
 Accept: application/json
 
 ###
 
 ### GET single user
-GET http://localhost:5001/users/2
+GET http://localhost:5001/users/9 HTTP/1.1
 Accept: application/json
 
 ###
 
 ### POST create user
-POST http://localhost:5001/users
+POST http://localhost:5001/users HTTP/1.1
+Accept: application/json
 Content-Type: application/json
 
 {
-  "name": "Hung",
-  "email": "sinhvienuet@vnu.vnu.edu.vn"
+  "name": "Student",
+  "email": "sinhvienuet25@vnu.vnu.edu.vn",
+
 }
 
 ###
 
 ### PATCH update user email
-PATCH http://localhost:5001/users/2
+PATCH http://localhost:5001/users/10 HTTP/1.1
+Accept: application/json
 Content-Type: application/json
 
 {
@@ -32,15 +36,52 @@ Content-Type: application/json
 ###
 
 ### PUT full update user
-PUT http://localhost:5001/users/3
+PUT http://localhost:5001/users/10 HTTP/1.1
+Accept: application/json
 Content-Type: application/json
 
 {
-  "name": "Hung Updated",
-  "email": "hung.updated.sinhvienuet@vnu.edu.vn"
+  "name": "Student Updated",
+  "email": "sinhvienuet36@vnu.edu.vn"
 }
 
 ###
 
-### DELETE user
-DELETE http://localhost:5001/users/1
+### DELETE user-2
+DELETE http://localhost:5001/users/10 HTTP/1.1
+Accept: application/json
+
+
+{
+  "data": {
+    "_links": {
+      "all_users": {
+        "href": "/users",
+        "method": "GET"
+      },
+      "create": {
+        "href": "/users",
+        "method": "POST"
+      },
+      "delete": {
+        "href": "/users/9",
+        "method": "DELETE"
+      },
+      "patch": {
+        "href": "/users/9",
+        "method": "PATCH"
+      },
+      "self": {
+        "href": "/users/9"
+      },
+      "update": {
+        "href": "/users/9",
+        "method": "PUT"
+      }
+    },
+    "email": "sinhvienuet@vnu.vnu.edu.vn",
+    "id": 9,
+    "name": "Hung"
+  },
+  "status": "success"
+}
