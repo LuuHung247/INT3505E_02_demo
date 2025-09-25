@@ -97,7 +97,7 @@ def serve():
     user_pb2_grpc.add_UserServiceServicer_to_server(UserService(), server)
     server.add_insecure_port('[::]:50051')
     server.start()
-    print("gRPC server running on port 50051...")
+    print(f"gRPC server running at localhost:50051")
     try:
         while True:
             time.sleep(86400)
