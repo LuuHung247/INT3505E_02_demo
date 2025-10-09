@@ -1,29 +1,39 @@
 openapi: 3.0.3
 info:
   title: Book Management API
-  description: API for managing books in a library system
-  version: 1.0.0
+  description: API for managing books in a library system with ETag and conditional requests support
+  version: 1.1.0
 
 servers:
-  - url: http://localhost:5001
+  - url: http://localhost
     description: Local development server
 
 paths:
   /api/v1/books:
     get:
       summary: Get all books
-      tags:
-        - Books
+      tags: [Books]
       parameters:
         - name: available
           in: query
-          description: Filter by availability
+          description: Filter books by availability (true or false)
           required: false
           schema:
             type: boolean
+        - name: If-None-Match
+          in: header
+          description: Return 304 if ETag matches the current list version
+          required: false
+          schema:
+            type: string
       responses:
         200:
-          description: A list of books
+          description: Successfully retrieved book list
+          headers:
+            ETag:
+              description: Entity tag for the current list of books
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -31,16 +41,19 @@ paths:
                 properties:
                   status:
                     type: string
+                    example: success
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/Book"
                   message:
                     type: string
+                    example: Book list retrieved successfully
+        304:
+          description: Not modified (ETag matches)
     post:
       summary: Create a new book
-      tags:
-        - Books
+      tags: [Books]
       requestBody:
         required: true
         content:
@@ -50,39 +63,67 @@ paths:
       responses:
         201:
           description: Book created successfully
-        400:
-          description: Missing required fields
-
-  /api/v1/books/{book_id}:
-    get:
-      summary: Get a book by ID
-      tags:
-        - Books
-      parameters:
-        - name: book_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        200:
-          description: Book found
+          headers:
+            ETag:
+              description: Entity tag for the newly created book
+              schema:
+                type: string
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Book"
-        404:
-          description: Book not found
-    put:
-      summary: Update a book
-      tags:
-        - Books
+        400:
+          description: Invalid input or missing required fields
+
+  /api/v1/books/{book_id}:
+    get:
+      summary: Get a book by ID
+      tags: [Books]
       parameters:
         - name: book_id
           in: path
           required: true
+          description: Unique ID of the book
           schema:
             type: integer
+        - name: If-None-Match
+          in: header
+          description: Return 304 if the ETag matches the current version of the book
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: Book found
+          headers:
+            ETag:
+              description: Entity tag for the current version of the book
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        304:
+          description: Not modified (ETag matches)
+        404:
+          description: Book not found
+    put:
+      summary: Update a book
+      tags: [Books]
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          description: Unique ID of the book to update
+          schema:
+            type: integer
+        - name: If-Match
+          in: header
+          description: Only update if ETag matches the current version of the book
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -92,21 +133,40 @@ paths:
       responses:
         200:
           description: Book updated successfully
+          headers:
+            ETag:
+              description: New ETag for the updated resource
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+        412:
+          description: Precondition Failed (ETag does not match)
         404:
           description: Book not found
     delete:
       summary: Delete a book
-      tags:
-        - Books
+      tags: [Books]
       parameters:
         - name: book_id
           in: path
           required: true
+          description: Unique ID of the book to delete
           schema:
             type: integer
+        - name: If-Match
+          in: header
+          description: Only delete if ETag matches the current version
+          required: false
+          schema:
+            type: string
       responses:
         200:
           description: Book deleted successfully
+        412:
+          description: Precondition Failed (ETag does not match)
         404:
           description: Book not found
 
@@ -127,6 +187,9 @@ components:
         available:
           type: boolean
           example: true
+        etag:
+          type: string
+          example: W/"12345abcd"
 
     NewBook:
       type: object

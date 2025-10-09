@@ -1,6 +1,9 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS 
+from flask_cors import CORS
+import hashlib
+import json
+
 app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:240724@localhost/soa_demo'
@@ -24,10 +27,24 @@ class Book(db.Model):
             "available": self.available
         }
 
-# ------------------ Response helper ------------------
+# ------------------ Helper functions ------------------
 
-def success_response(data=None, message=None, status_code=200):
-    return jsonify({"status": "success", "data": data, "message": message}), status_code
+def generate_etag(data_dict):
+    """Tạo ETag dựa trên hash MD5 của dữ liệu JSON."""
+    data_str = json.dumps(data_dict, sort_keys=True)
+    return hashlib.md5(data_str.encode('utf-8')).hexdigest()
+
+def success_response(data=None, message=None, status_code=200, etag=None):
+    response = make_response(jsonify({
+        "status": "success",
+        "data": data,
+        "message": message
+    }), status_code)
+    if etag:
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "private, max-age=120"
+    return response
+
 
 def error_response(message, status_code=400):
     return jsonify({"status": "error", "data": None, "message": message}), status_code
@@ -41,14 +58,29 @@ def get_books():
     if available is not None:
         query = query.filter_by(available=(available.lower() == 'true'))
     books = query.all()
-    return success_response([b.to_dict() for b in books])
+    book_list = [b.to_dict() for b in books]
+    etag = generate_etag(book_list)
+
+    # Kiểm tra ETag từ client
+    client_etag = request.headers.get('If-None-Match')
+    if client_etag == etag:
+        return '', 304  # Không có thay đổi
+
+    return success_response(book_list, etag=etag)
 
 @app.route('/api/v1/books/<int:book_id>', methods=['GET'])
 def get_book(book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
-    return success_response(book.to_dict())
+
+    book_data = book.to_dict()
+    etag = generate_etag(book_data)
+    client_etag = request.headers.get('If-None-Match')
+    if client_etag == etag:
+        return '', 304
+
+    return success_response(book_data, etag=etag)
 
 @app.route('/api/v1/books', methods=['POST'])
 def create_book():
@@ -58,13 +90,16 @@ def create_book():
     new_book = Book(title=data['title'], author=data['author'])
     db.session.add(new_book)
     db.session.commit()
-    return success_response(new_book.to_dict(), "Book created", 201)
+    book_data = new_book.to_dict()
+    etag = generate_etag(book_data)
+    return success_response(book_data, "Book created", 201, etag)
 
 @app.route('/api/v1/books/<int:book_id>', methods=['PUT'])
 def update_book(book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
+
     data = request.get_json()
     if "title" in data:
         book.title = data["title"]
@@ -73,7 +108,10 @@ def update_book(book_id):
     if "available" in data:
         book.available = bool(data["available"])
     db.session.commit()
-    return success_response(book.to_dict(), "Book updated")
+
+    book_data = book.to_dict()
+    etag = generate_etag(book_data)
+    return success_response(book_data, "Book updated", etag=etag)
 
 @app.route('/api/v1/books/<int:book_id>', methods=['DELETE'])
 def delete_book(book_id):
@@ -95,7 +133,9 @@ def borrow_book(book_id):
         return error_response("Book is already borrowed", 400)
     book.available = False
     db.session.commit()
-    return success_response(book.to_dict(), "Book borrowed")
+    book_data = book.to_dict()
+    etag = generate_etag(book_data)
+    return success_response(book_data, "Book borrowed", etag=etag)
 
 @app.route('/api/v1/books/<int:book_id>/return', methods=['POST'])
 def return_book(book_id):
@@ -106,8 +146,9 @@ def return_book(book_id):
         return error_response("Book is already available", 400)
     book.available = True
     db.session.commit()
-    return success_response(book.to_dict(), "Book returned")
-
+    book_data = book.to_dict()
+    etag = generate_etag(book_data)
+    return success_response(book_data, "Book returned", etag=etag)
 
 # ------------------ Main ------------------
 
