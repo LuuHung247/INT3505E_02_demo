@@ -3,16 +3,19 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 import hashlib
 import json
-
+import jwt
+import datetime
+from functools import wraps
+from flask_swagger_ui import get_swaggerui_blueprint
 app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:240724@localhost/soa_demo'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'your_secret_key_here'  # Dùng để mã hóa JWT
 
 db = SQLAlchemy(app)
 
 # ------------------ Model ------------------
-
 class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
@@ -45,14 +48,52 @@ def success_response(data=None, message=None, status_code=200, etag=None):
         response.headers["Cache-Control"] = "private, max-age=120"
     return response
 
-
 def error_response(message, status_code=400):
-    return jsonify({"status": "error", "data": None, "message": message}), status_code
+    response = jsonify({"status": "error", "data": None, "message": message})
+    response.headers["Content-Type"] = "application/json"
+    return response
+
+# ------------------ AUTH ------------------
+
+# Decorator xác thực JWT
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            parts = request.headers['Authorization'].split()
+            if len(parts) == 2 and parts[0] == 'Bearer':
+                token = parts[1]
+        if not token:
+            return error_response("Token is missing", 401)
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = data['user']
+        except jwt.ExpiredSignatureError:
+            return error_response("Token expired", 401)
+        except jwt.InvalidTokenError:
+            return error_response("Invalid token", 401)
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+@app.route('/api/v1/login', methods=['POST'])
+def login():
+    body = request.get_json()
+    username = body.get('username')
+    password = body.get('password')
+    if username == 'admin' and password == '123456':  # Demo
+        token = jwt.encode({
+            'user': username,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)
+        }, app.config['SECRET_KEY'], algorithm="HS256")
+        return success_response({"token": token}, "Login successful")
+    return error_response("Invalid credentials", 401)
 
 # ------------------ Book API ------------------
 
 @app.route('/api/v1/books', methods=['GET'])
-def get_books():
+@token_required
+def get_books(current_user):
     available = request.args.get('available')
     query = Book.query
     if available is not None:
@@ -61,15 +102,15 @@ def get_books():
     book_list = [b.to_dict() for b in books]
     etag = generate_etag(book_list)
 
-    # Kiểm tra ETag từ client
     client_etag = request.headers.get('If-None-Match')
     if client_etag == etag:
-        return '', 304  # Không có thay đổi
+        return '', 304
 
     return success_response(book_list, etag=etag)
 
 @app.route('/api/v1/books/<int:book_id>', methods=['GET'])
-def get_book(book_id):
+@token_required
+def get_book(current_user, book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
@@ -83,7 +124,8 @@ def get_book(book_id):
     return success_response(book_data, etag=etag)
 
 @app.route('/api/v1/books', methods=['POST'])
-def create_book():
+@token_required
+def create_book(current_user):
     data = request.get_json()
     if not data or not data.get('title') or not data.get('author'):
         return error_response("Missing title or author", 400)
@@ -95,26 +137,53 @@ def create_book():
     return success_response(book_data, "Book created", 201, etag)
 
 @app.route('/api/v1/books/<int:book_id>', methods=['PUT'])
-def update_book(book_id):
+@token_required
+def update_book(current_user, book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
 
     data = request.get_json()
+    if not data:
+        return error_response("No data provided", 400)
+
+    # Cập nhật thông tin cơ bản
     if "title" in data:
         book.title = data["title"]
     if "author" in data:
         book.author = data["author"]
+
+    # Xử lý borrow/return với ràng buộc hợp lệ
+    action = "Book info updated"
     if "available" in data:
-        book.available = bool(data["available"])
+        new_status = bool(data["available"])
+
+        # Nếu client yêu cầu mượn mà sách đang bị mượn
+        if not new_status and not book.available:
+            return error_response("Book is already borrowed", 400)
+
+        # Nếu client yêu cầu trả mà sách đang sẵn có
+        if new_status and book.available:
+            return error_response("Book is already available", 400)
+
+        # Nếu hợp lệ thì cập nhật trạng thái
+        if book.available and not new_status:
+            book.available = False
+            action = "Book borrowed"
+        elif not book.available and new_status:
+            book.available = True
+            action = "Book returned"
+
     db.session.commit()
 
     book_data = book.to_dict()
     etag = generate_etag(book_data)
-    return success_response(book_data, "Book updated", etag=etag)
+    return success_response(book_data, action, etag=etag)
+
 
 @app.route('/api/v1/books/<int:book_id>', methods=['DELETE'])
-def delete_book(book_id):
+@token_required
+def delete_book(current_user, book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
@@ -122,33 +191,28 @@ def delete_book(book_id):
     db.session.commit()
     return success_response(None, "Book deleted")
 
-# -------- Borrow / Return without borrow table --------
+# ------------------ Swagger UI ------------------
 
-@app.route('/api/v1/books/<int:book_id>/borrow', methods=['POST'])
-def borrow_book(book_id):
-    book = db.session.get(Book, book_id)
-    if not book:
-        return error_response("Book not found", 404)
-    if not book.available:
-        return error_response("Book is already borrowed", 400)
-    book.available = False
-    db.session.commit()
-    book_data = book.to_dict()
-    etag = generate_etag(book_data)
-    return success_response(book_data, "Book borrowed", etag=etag)
+# Đường dẫn file swagger.yaml trong thư mục static
+SWAGGER_URL = '/docs'
+API_URL = '/static/swagger.yaml'
 
-@app.route('/api/v1/books/<int:book_id>/return', methods=['POST'])
-def return_book(book_id):
-    book = db.session.get(Book, book_id)
-    if not book:
-        return error_response("Book not found", 404)
-    if book.available:
-        return error_response("Book is already available", 400)
-    book.available = True
-    db.session.commit()
-    book_data = book.to_dict()
-    etag = generate_etag(book_data)
-    return success_response(book_data, "Book returned", etag=etag)
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={'app_name': "Book Management API"}
+)
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
+# Route để phục vụ swagger.yaml từ thư mục static
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory(os.path.join(app.root_path, 'static'), filename)
+
+
+@app.route('/')
+def home():
+    return 'Swagger UI available at /docs'
 
 # ------------------ Main ------------------
 

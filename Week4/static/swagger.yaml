@@ -1,17 +1,66 @@
 openapi: 3.0.3
 info:
   title: Book Management API
-  description: API for managing books in a library system with ETag and conditional requests support
+  description: Simple API for managing books with JWT authentication and ETag support
   version: 1.1.0
 
 servers:
-  - url: http://localhost
+  - url: http://localhost:5001
     description: Local development server
 
+# Áp dụng Bearer token mặc định cho toàn bộ API
+security:
+  - bearerAuth: []
+
 paths:
+  /api/v1/login:
+    post:
+      summary: Login to obtain JWT token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: admin
+                password:
+                  type: string
+                  example: 123456
+      responses:
+        200:
+          description: Login successful, returns JWT token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  message:
+                    type: string
+                    example: Login successful
+        401:
+          description: Invalid credentials
+
   /api/v1/books:
     get:
       summary: Get all books
+      security:
+        - bearerAuth: []
       tags: [Books]
       parameters:
         - name: available
@@ -20,18 +69,12 @@ paths:
           required: false
           schema:
             type: boolean
-        - name: If-None-Match
-          in: header
-          description: Return 304 if ETag matches the current list version
-          required: false
-          schema:
-            type: string
       responses:
         200:
-          description: Successfully retrieved book list
+          description: Successfully retrieved list of books
           headers:
             ETag:
-              description: Entity tag for the current list of books
+              description: Resource version identifier
               schema:
                 type: string
           content:
@@ -50,9 +93,14 @@ paths:
                     type: string
                     example: Book list retrieved successfully
         304:
-          description: Not modified (ETag matches)
+          description: Not modified (ETag matched)
+        401:
+          description: Unauthorized – missing or invalid token
+
     post:
       summary: Create a new book
+      security:
+        - bearerAuth: []
       tags: [Books]
       requestBody:
         required: true
@@ -65,65 +113,78 @@ paths:
           description: Book created successfully
           headers:
             ETag:
-              description: Entity tag for the newly created book
+              description: Resource version identifier
               schema:
                 type: string
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Book"
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: "#/components/schemas/Book"
+                  message:
+                    type: string
+                    example: Book created
         400:
-          description: Invalid input or missing required fields
+          description: Missing title or author
+        401:
+          description: Unauthorized – missing or invalid token
 
   /api/v1/books/{book_id}:
     get:
-      summary: Get a book by ID
+      summary: Get a specific book by ID
+      security:
+        - bearerAuth: []
       tags: [Books]
       parameters:
         - name: book_id
           in: path
           required: true
-          description: Unique ID of the book
           schema:
             type: integer
-        - name: If-None-Match
-          in: header
-          description: Return 304 if the ETag matches the current version of the book
-          required: false
-          schema:
-            type: string
       responses:
         200:
           description: Book found
           headers:
             ETag:
-              description: Entity tag for the current version of the book
+              description: Resource version identifier
               schema:
                 type: string
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Book"
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: "#/components/schemas/Book"
+                  message:
+                    type: string
+                    example: Book retrieved
         304:
-          description: Not modified (ETag matches)
+          description: Not modified (ETag matched)
         404:
           description: Book not found
+        401:
+          description: Unauthorized – missing or invalid token
+
     put:
-      summary: Update a book
+      summary: Update a book or change its availability (borrow/return)
+      security:
+        - bearerAuth: []
       tags: [Books]
       parameters:
         - name: book_id
           in: path
           required: true
-          description: Unique ID of the book to update
           schema:
             type: integer
-        - name: If-Match
-          in: header
-          description: Only update if ETag matches the current version of the book
-          required: true
-          schema:
-            type: string
       requestBody:
         required: true
         content:
@@ -132,45 +193,73 @@ paths:
               $ref: "#/components/schemas/UpdateBook"
       responses:
         200:
-          description: Book updated successfully
+          description: Book updated, borrowed, or returned successfully
           headers:
             ETag:
-              description: New ETag for the updated resource
+              description: Resource version identifier
               schema:
                 type: string
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Book"
-        412:
-          description: Precondition Failed (ETag does not match)
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: "#/components/schemas/Book"
+                  message:
+                    type: string
+                    example: Book borrowed
+        400:
+          description: Invalid request or borrowing an already borrowed book
         404:
           description: Book not found
+        401:
+          description: Unauthorized – missing or invalid token
+
     delete:
-      summary: Delete a book
+      summary: Delete a book by ID
+      security:
+        - bearerAuth: []
       tags: [Books]
       parameters:
         - name: book_id
           in: path
           required: true
-          description: Unique ID of the book to delete
           schema:
             type: integer
-        - name: If-Match
-          in: header
-          description: Only delete if ETag matches the current version
-          required: false
-          schema:
-            type: string
       responses:
         200:
           description: Book deleted successfully
-        412:
-          description: Precondition Failed (ETag does not match)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: "null"
+                    example: null
+                  message:
+                    type: string
+                    example: Book deleted
         404:
           description: Book not found
+        401:
+          description: Unauthorized – missing or invalid token
 
 components:
+  # Cấu hình bảo mật JWT Bearer cho Swagger UI
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     Book:
       type: object
@@ -187,9 +276,6 @@ components:
         available:
           type: boolean
           example: true
-        etag:
-          type: string
-          example: W/"12345abcd"
 
     NewBook:
       type: object
