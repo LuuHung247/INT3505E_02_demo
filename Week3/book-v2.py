@@ -1,8 +1,16 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:240724@localhost/soa_demo'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+db = SQLAlchemy(app)
+
+app = Flask(__name__)
+CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:240724@localhost/soa_demo'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -24,13 +32,24 @@ class Book(db.Model):
             "available": self.available
         }
 
-# ------------------ Response helper ------------------
 
-def success_response(data=None, message=None, status_code=200):
-    return jsonify({"status": "success", "data": data, "message": message}), status_code
+# ------------------ Helper functions ------------------
+
+
+def success_response(data=None, message=None, status_code=200, etag=None):
+    response = make_response(jsonify({
+        "status": "success",
+        "data": data,
+        "message": message
+    }), status_code)
+    response.headers["Content-Type"] = "application/json"
+    return response
+
 
 def error_response(message, status_code=400):
-    return jsonify({"status": "error", "data": None, "message": message}), status_code
+    response = jsonify({"status": "error", "data": None, "message": message}, status_code)
+    response.headers["Content-Type"] = "application/json"
+    return response
 
 # ------------------ Book API ------------------
 
@@ -41,14 +60,18 @@ def get_books():
     if available is not None:
         query = query.filter_by(available=(available.lower() == 'true'))
     books = query.all()
-    return success_response([b.to_dict() for b in books])
+    book_list = [b.to_dict() for b in books]
+
+    return success_response(book_list)
 
 @app.route('/api/v1/books/<int:book_id>', methods=['GET'])
 def get_book(book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
-    return success_response(book.to_dict())
+
+    book_data = book.to_dict()
+    return success_response(book_data)
 
 @app.route('/api/v1/books', methods=['POST'])
 def create_book():
@@ -58,22 +81,52 @@ def create_book():
     new_book = Book(title=data['title'], author=data['author'])
     db.session.add(new_book)
     db.session.commit()
-    return success_response(new_book.to_dict(), "Book created", 201)
+    book_data = new_book.to_dict()
+    return success_response(book_data, "Book created", 201)
+
 
 @app.route('/api/v1/books/<int:book_id>', methods=['PUT'])
-def update_book(book_id):
+def update_book(current_user, book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
+
     data = request.get_json()
+    if not data:
+        return error_response("No data provided", 400)
+
+    # Cập nhật thông tin cơ bản
     if "title" in data:
         book.title = data["title"]
     if "author" in data:
         book.author = data["author"]
+
+    # Xử lý borrow/return với ràng buộc hợp lệ
+    action = "Book info updated"
     if "available" in data:
-        book.available = bool(data["available"])
+        new_status = bool(data["available"])
+
+        # Nếu client yêu cầu mượn mà sách đang bị mượn
+        if not new_status and not book.available:
+            return error_response("Book is already borrowed", 400)
+
+        # Nếu client yêu cầu trả mà sách đang sẵn có
+        if new_status and book.available:
+            return error_response("Book is already available", 400)
+
+        # Nếu hợp lệ thì cập nhật trạng thái
+        if book.available and not new_status:
+            book.available = False
+            action = "Book borrowed"
+        elif not book.available and new_status:
+            book.available = True
+            action = "Book returned"
+
     db.session.commit()
-    return success_response(book.to_dict(), "Book updated")
+
+    book_data = book.to_dict()
+    return success_response(book_data, action)
+
 
 @app.route('/api/v1/books/<int:book_id>', methods=['DELETE'])
 def delete_book(book_id):
@@ -84,29 +137,6 @@ def delete_book(book_id):
     db.session.commit()
     return success_response(None, "Book deleted")
 
-# -------- Borrow / Return without borrow table --------
-
-@app.route('/api/v1/books/<int:book_id>/borrow', methods=['POST'])
-def borrow_book(book_id):
-    book = db.session.get(Book, book_id)
-    if not book:
-        return error_response("Book not found", 404)
-    if not book.available:
-        return error_response("Book is already borrowed", 400)
-    book.available = False
-    db.session.commit()
-    return success_response(book.to_dict(), "Book borrowed")
-
-@app.route('/api/v1/books/<int:book_id>/return', methods=['POST'])
-def return_book(book_id):
-    book = db.session.get(Book, book_id)
-    if not book:
-        return error_response("Book not found", 404)
-    if book.available:
-        return error_response("Book is already available", 400)
-    book.available = True
-    db.session.commit()
-    return success_response(book.to_dict(), "Book returned")
 
 
 # ------------------ Main ------------------
