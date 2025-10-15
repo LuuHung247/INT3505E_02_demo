@@ -86,7 +86,7 @@ def create_book():
 
 
 @app.route('/api/v1/books/<int:book_id>', methods=['PUT'])
-def update_book(current_user, book_id):
+def update_book(book_id):
     book = db.session.get(Book, book_id)
     if not book:
         return error_response("Book not found", 404)
