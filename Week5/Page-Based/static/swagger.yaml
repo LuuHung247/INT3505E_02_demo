@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Book Management API
   description: API for managing books, members, and book_borrowed records with JWT authentication and ETag support
-  version: 1.2.1
+  version: 1.2.2
 
 servers:
   - url: http://localhost:5001
@@ -48,7 +48,7 @@ paths:
 
   /api/v1/books:
     get:
-      summary: Get all books with optional filtering and pagination
+      summary: Get all books with optional filtering and page-based pagination
       tags: [Books]
       parameters:
         - name: available
@@ -66,16 +66,16 @@ paths:
           schema:
             type: string
           description: Filter books by author
-        - name: limit
+        - name: page
           in: query
           schema:
             type: integer
-          description: Limit number of results
-        - name: offset
+          description: Page number (starting from 1)
+        - name: per_page
           in: query
           schema:
             type: integer
-          description: Offset for pagination
+          description: Number of results per page
       responses:
         200:
           description: List of books retrieved successfully
@@ -111,69 +111,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/Book"
 
-  /api/v1/books/{book_id}:
-    get:
-      summary: Get a book by ID
-      tags: [Books]
-      parameters:
-        - name: book_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        200:
-          description: Book retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Book"
-        404:
-          description: Book not found
-
-    put:
-      summary: Update a book or handle borrow/return logic
-      tags: [Books]
-      parameters:
-        - name: book_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateBook"
-      responses:
-        200:
-          description: Book updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Book"
-        400:
-          description: Invalid request
-
-    delete:
-      summary: Delete a book
-      tags: [Books]
-      parameters:
-        - name: book_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        200:
-          description: Book deleted successfully
-        404:
-          description: Book not found
-
   /api/v1/members:
     get:
-      summary: Get all members with optional name filter and pagination
+      summary: Get all members with optional name filter and page-based pagination
       tags: [Members]
       parameters:
         - name: name
@@ -181,16 +121,16 @@ paths:
           schema:
             type: string
           description: Filter by member name
-        - name: limit
+        - name: page
           in: query
           schema:
             type: integer
-          description: Limit number of results
-        - name: offset
+          description: Page number (starting from 1)
+        - name: per_page
           in: query
           schema:
             type: integer
-          description: Offset for pagination
+          description: Number of results per page
       responses:
         200:
           description: List of members retrieved successfully
@@ -209,82 +149,44 @@ paths:
                       pagination:
                         $ref: "#/components/schemas/Pagination"
 
-    post:
-      summary: Create a new member
-      tags: [Members]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/NewMember"
-      responses:
-        201:
-          description: Member created successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Member"
-
-  /api/v1/members/{member_id}:
-    get:
-      summary: Get a member by ID
-      tags: [Members]
-      parameters:
-        - name: member_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        200:
-          description: Member retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Member"
-        404:
-          description: Member not found
-
-    put:
-      summary: Update a member
-      tags: [Members]
-      parameters:
-        - name: member_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateMember"
-      responses:
-        200:
-          description: Member updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Member"
-
-    delete:
-      summary: Delete a member
-      tags: [Members]
-      parameters:
-        - name: member_id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        200:
-          description: Member deleted successfully
-        404:
-          description: Member not found
-
   /api/v1/books-borrowed:
+    get:
+      summary: Get list of borrowed books with page-based pagination
+      tags: [Books Borrowed]
+      parameters:
+        - name: member_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by member ID
+        - name: page
+          in: query
+          schema:
+            type: integer
+          description: Page number (starting from 1)
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+          description: Number of results per page
+      responses:
+        200:
+          description: List of borrowed books retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      books_borrowed:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/BookBorrowed"
+                      pagination:
+                        $ref: "#/components/schemas/Pagination"
+
     post:
       summary: Create a new book borrowing record
       tags: [Books Borrowed]
@@ -303,28 +205,6 @@ paths:
                 $ref: "#/components/schemas/BookBorrowed"
         400:
           description: Missing member_id or book_id
-
-    get:
-      summary: Get list of borrowed books
-      tags: [Books Borrowed]
-      parameters:
-        - name: member_id
-          in: query
-          schema:
-            type: integer
-          description: Filter by member ID
-      responses:
-        200:
-          description: List of borrowed books retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/BookBorrowed"
 
 components:
   securitySchemes:
@@ -361,19 +241,6 @@ components:
           type: string
           example: James Clear
 
-    UpdateBook:
-      type: object
-      properties:
-        title:
-          type: string
-          example: Updated Title
-        author:
-          type: string
-          example: Updated Author
-        available:
-          type: boolean
-          example: false
-
     Member:
       type: object
       properties:
@@ -400,16 +267,6 @@ components:
         email:
           type: string
           example: jane@example.com
-
-    UpdateMember:
-      type: object
-      properties:
-        name:
-          type: string
-          example: Updated Name
-        email:
-          type: string
-          example: updated_email@example.com
 
     BookBorrowed:
       type: object
@@ -448,13 +305,20 @@ components:
         total:
           type: integer
           example: 20
-        limit:
+        per_page:
           type: integer
           example: 10
-        offset:
+        current_page:
           type: integer
-          example: 0
-        next_offset:
+          example: 1
+        total_pages:
+          type: integer
+          example: 2
+        next_page:
           type: integer
           nullable: true
-          example: 10
+          example: 2
+        prev_page:
+          type: integer
+          nullable: true
+          example: null

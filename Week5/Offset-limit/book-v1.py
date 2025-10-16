@@ -44,17 +44,21 @@ class Member(db.Model):
             "email": self.email,
             "join_date": self.join_date.strftime("%Y-%m-%d %H:%M:%S")
         }
-
-class Loan(db.Model):
+    # Quan hệ: Một member có thể mượn nhiều sách
+    book_borrowed = db.relationship("BookBorrowed", back_populates="member")
+class BookBorrowed(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     member_id = db.Column(db.Integer, db.ForeignKey('member.id'), nullable=False)
     book_id = db.Column(db.Integer, db.ForeignKey('book.id'), nullable=False)
     borrow_date = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     return_date = db.Column(db.DateTime, nullable=True)
 
-    member = db.relationship("Member", backref="loans")
-    book = db.relationship("Book", backref="loans")
+    member = db.relationship("Member", back_populates="book_borrowed")
+    book = db.relationship("Book", backref="book_borrowed")
 
+    __table_args__ = (
+        db.UniqueConstraint('book_id', 'return_date', name='unique_active_borrow'),
+    )
     def to_dict(self):
         return {
             "id": self.id,
@@ -63,7 +67,6 @@ class Loan(db.Model):
             "borrow_date": self.borrow_date.strftime("%Y-%m-%d %H:%M:%S"),
             "return_date": self.return_date.strftime("%Y-%m-%d %H:%M:%S") if self.return_date else None
         }
-
 # ------------------ Helper functions ------------------
 
 def generate_etag(data_dict):
@@ -266,13 +269,114 @@ def get_members(current_user):
         "offset": offset,
         "next_offset": offset + limit if offset + limit < total else None
     }
-    return success_response({"members": data, "pagination": pagination})
+    return success_response({"members": data, "pagination": pagination}, "Members fetched successfully")
 
-# ------------------ Loan API ------------------
 
-@app.route('/api/v1/loans', methods=['POST'])
+@app.route('/api/v1/members/<int:member_id>', methods=['GET'])
 @token_required
-def create_loan(current_user):
+def get_member(current_user, member_id):
+    member = db.session.get(Member, member_id)
+    if not member:
+        return error_response("Member not found", 404)
+
+    member_data = member.to_dict()
+    etag = generate_etag(member_data)
+    client_etag = request.headers.get('If-None-Match')
+    if client_etag == etag:
+        return '', 304
+
+    return success_response(member_data, "Member fetched successfully", etag=etag)
+
+
+@app.route('/api/v1/members', methods=['POST'])
+@token_required
+def create_member(current_user):
+    data = request.get_json()
+    if not data or not data.get('name') or not data.get('email'):
+        return error_response("Missing name or email", 400)
+
+    existing_member = Member.query.filter_by(email=data['email']).first()
+    if existing_member:
+        return error_response("Email already exists", 400)
+
+    new_member = Member(name=data['name'], email=data['email'])
+    db.session.add(new_member)
+    db.session.commit()
+
+    member_data = new_member.to_dict()
+    etag = generate_etag(member_data)
+    return success_response(member_data, "Member created successfully", 201, etag)
+
+
+@app.route('/api/v1/members/<int:member_id>', methods=['PUT'])
+@token_required
+def update_member(current_user, member_id):
+    member = db.session.get(Member, member_id)
+    if not member:
+        return error_response("Member not found", 404)
+
+    data = request.get_json()
+    if not data:
+        return error_response("No data provided", 400)
+
+    if "name" in data:
+        member.name = data["name"]
+    if "email" in data:
+        # Kiểm tra email trùng lặp
+        existing = Member.query.filter(Member.email == data["email"], Member.id != member_id).first()
+        if existing:
+            return error_response("Email already exists", 400)
+        member.email = data["email"]
+
+    db.session.commit()
+
+    member_data = member.to_dict()
+    etag = generate_etag(member_data)
+    return success_response(member_data, "Member updated successfully", etag=etag)
+
+
+@app.route('/api/v1/members/<int:member_id>', methods=['DELETE'])
+@token_required
+def delete_member(current_user, member_id):
+    member = db.session.get(Member, member_id)
+    if not member:
+        return error_response("Member not found", 404)
+
+    db.session.delete(member)
+    db.session.commit()
+    return success_response(None, "Member deleted successfully")
+
+
+# ------------------ Book Borrowed API ------------------
+
+@app.route('/api/v1/books-borrowed', methods=['GET'])
+@token_required
+def get_books_borrowed(current_user):
+    member_id = request.args.get('member_id')
+    limit = int(request.args.get('limit', 10))
+    offset = int(request.args.get('offset', 0))
+
+    query = BookBorrowed.query
+    if member_id:
+        query = query.filter_by(member_id=member_id)
+
+    total = query.count()
+    records = query.offset(offset).limit(limit).all()
+
+    data = [r.to_dict() for r in records]
+    pagination = {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "next_offset": offset + limit if offset + limit < total else None
+    }
+
+    return success_response({"books_borrowed": data, "pagination": pagination})
+
+
+@app.route('/api/v1/books-borrowed', methods=['POST'])
+@token_required
+def create_book_borrowed(current_user):
     data = request.get_json()
     member_id = data.get('member_id')
     book_id = data.get('book_id')
@@ -281,15 +385,50 @@ def create_loan(current_user):
         return error_response("Missing member_id or book_id", 400)
 
     book = db.session.get(Book, book_id)
-    if not book or not book.available:
-        return error_response("Book not available", 400)
+    if not book:
+        return error_response("Book not found", 404)
 
-    new_loan = Loan(member_id=member_id, book_id=book_id)
+    # Kiểm tra nếu sách đang bị mượn (chưa có return_date)
+    existing_borrow = BookBorrowed.query.filter_by(book_id=book_id, return_date=None).first()
+    if existing_borrow:
+        return error_response("Book is already borrowed", 400)
+
+    new_borrow = BookBorrowed(member_id=member_id, book_id=book_id)
     book.available = False
 
-    db.session.add(new_loan)
+    db.session.add(new_borrow)
     db.session.commit()
-    return success_response(new_loan.to_dict(), "Loan created", 201)
+    return success_response(new_borrow.to_dict(), "Book borrowed successfully", 201)
+
+
+@app.route('/api/v1/books-borrowed/<int:borrow_id>', methods=['PUT'])
+@token_required
+def return_book(current_user, borrow_id):
+    record = db.session.get(BookBorrowed, borrow_id)
+    if not record:
+        return error_response("Borrow record not found", 404)
+
+    if record.return_date:
+        return error_response("Book already returned", 400)
+
+    record.return_date = datetime.datetime.utcnow()
+    record.book.available = True
+    db.session.commit()
+
+    return success_response(record.to_dict(), "Book returned successfully")
+
+
+@app.route('/api/v1/books-borrowed/<int:borrow_id>', methods=['DELETE'])
+@token_required
+def delete_borrow_record(current_user, borrow_id):
+    record = db.session.get(BookBorrowed, borrow_id)
+    if not record:
+        return error_response("Borrow record not found", 404)
+
+    db.session.delete(record)
+    db.session.commit()
+    return success_response(None, "Borrow record deleted successfully")
+
 
 
 # ------------------ Swagger UI ------------------
