@@ -1,0 +1,659 @@
+openapi: 3.0.3
+info:
+  description: "API for managing books, members, and book_borrowed records with JWT\
+    \ authentication and ETag support (Cursor-based pagination)"
+  title: Book Management API
+  version: 1.3.0
+servers:
+- description: Local development server
+  url: http://localhost:5001
+security:
+- bearerAuth: []
+paths:
+  /api/v1/books:
+    get:
+      operationId: api_v1_books_get
+      parameters:
+      - description: Filter books by availability
+        explode: true
+        in: query
+        name: available
+        required: false
+        schema:
+          type: boolean
+        style: form
+      - description: Filter books by title
+        explode: true
+        in: query
+        name: title
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Filter books by author
+        explode: true
+        in: query
+        name: author
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Cursor indicating the last retrieved book ID
+        explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          nullable: true
+          type: integer
+        style: form
+      - description: Number of books to retrieve per request
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 10
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/_api_v1_books_get_200_response"
+          description: List of books retrieved successfully
+      summary: Get all books with optional filters (cursor-based pagination)
+      tags:
+      - Books
+      x-openapi-router-controller: openapi_server.controllers.books_controller
+    post:
+      operationId: api_v1_books_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewBook"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+          description: Book created successfully
+      summary: Create a new book
+      tags:
+      - Books
+      x-openapi-router-controller: openapi_server.controllers.books_controller
+  /api/v1/books-borrowed:
+    get:
+      operationId: api_v1_books_borrowed_get
+      parameters:
+      - description: Filter by member ID
+        explode: true
+        in: query
+        name: member_id
+        required: false
+        schema:
+          type: integer
+        style: form
+      - description: Cursor indicating the last retrieved borrow record ID
+        explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          nullable: true
+          type: integer
+        style: form
+      - description: Number of records to retrieve
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 10
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/_api_v1_books_borrowed_get_200_response"
+          description: List of borrowed books retrieved successfully
+      summary: Get list of borrowed books (cursor-based pagination)
+      tags:
+      - Books Borrowed
+      x-openapi-router-controller: openapi_server.controllers.books_borrowed_controller
+    post:
+      operationId: api_v1_books_borrowed_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewBookBorrowed"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookBorrowed"
+          description: Book borrowed successfully
+        "400":
+          description: Missing member_id or book_id
+      summary: Create a new book borrowing record
+      tags:
+      - Books Borrowed
+      x-openapi-router-controller: openapi_server.controllers.books_borrowed_controller
+  /api/v1/books/{book_id}:
+    delete:
+      operationId: api_v1_books_book_id_delete
+      parameters:
+      - explode: false
+        in: path
+        name: book_id
+        required: true
+        schema:
+          type: integer
+        style: simple
+      responses:
+        "200":
+          description: Book deleted successfully
+        "404":
+          description: Book not found
+      summary: Delete a book
+      tags:
+      - Books
+      x-openapi-router-controller: openapi_server.controllers.books_controller
+    get:
+      operationId: api_v1_books_book_id_get
+      parameters:
+      - explode: false
+        in: path
+        name: book_id
+        required: true
+        schema:
+          type: integer
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+          description: Book retrieved successfully
+        "404":
+          description: Book not found
+      summary: Get a book by ID
+      tags:
+      - Books
+      x-openapi-router-controller: openapi_server.controllers.books_controller
+    put:
+      operationId: api_v1_books_book_id_put
+      parameters:
+      - explode: false
+        in: path
+        name: book_id
+        required: true
+        schema:
+          type: integer
+        style: simple
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBook"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Book"
+          description: Book updated successfully
+      summary: Update a book or handle borrow/return logic
+      tags:
+      - Books
+      x-openapi-router-controller: openapi_server.controllers.books_controller
+  /api/v1/login:
+    post:
+      operationId: api_v1_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/_api_v1_login_post_request"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/_api_v1_login_post_200_response"
+          description: "Login successful, returns JWT token"
+        "401":
+          description: Invalid credentials
+      summary: Login to obtain JWT token
+      tags:
+      - Auth
+      x-openapi-router-controller: openapi_server.controllers.auth_controller
+  /api/v1/members:
+    get:
+      operationId: api_v1_members_get
+      parameters:
+      - description: Filter by member name
+        explode: true
+        in: query
+        name: name
+        required: false
+        schema:
+          type: string
+        style: form
+      - description: Cursor indicating the last retrieved member ID
+        explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          nullable: true
+          type: integer
+        style: form
+      - description: Number of members to retrieve
+        explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 10
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/_api_v1_members_get_200_response"
+          description: List of members retrieved successfully
+      summary: Get all members with optional filter (cursor-based pagination)
+      tags:
+      - Members
+      x-openapi-router-controller: openapi_server.controllers.members_controller
+    post:
+      operationId: api_v1_members_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewMember"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+          description: Member created successfully
+      summary: Create a new member
+      tags:
+      - Members
+      x-openapi-router-controller: openapi_server.controllers.members_controller
+components:
+  schemas:
+    Book:
+      example:
+        author: F. Scott Fitzgerald
+        available: true
+        id: 1
+        title: The Great Gatsby
+      properties:
+        id:
+          example: 1
+          title: id
+          type: integer
+        title:
+          example: The Great Gatsby
+          title: title
+          type: string
+        author:
+          example: F. Scott Fitzgerald
+          title: author
+          type: string
+        available:
+          example: true
+          title: available
+          type: boolean
+      title: Book
+      type: object
+    NewBook:
+      example:
+        author: James Clear
+        title: Atomic Habits
+      properties:
+        title:
+          example: Atomic Habits
+          title: title
+          type: string
+        author:
+          example: James Clear
+          title: author
+          type: string
+      required:
+      - author
+      - title
+      title: NewBook
+      type: object
+    UpdateBook:
+      example:
+        author: Updated Author
+        available: false
+        title: Updated Title
+      properties:
+        title:
+          example: Updated Title
+          title: title
+          type: string
+        author:
+          example: Updated Author
+          title: author
+          type: string
+        available:
+          example: false
+          title: available
+          type: boolean
+      title: UpdateBook
+      type: object
+    Member:
+      example:
+        join_date: 2025-10-15 14:30:00
+        name: John Doe
+        id: 1
+        email: john@example.com
+      properties:
+        id:
+          example: 1
+          title: id
+          type: integer
+        name:
+          example: John Doe
+          title: name
+          type: string
+        email:
+          example: john@example.com
+          title: email
+          type: string
+        join_date:
+          example: 2025-10-15 14:30:00
+          title: join_date
+          type: string
+      title: Member
+      type: object
+    NewMember:
+      example:
+        name: Jane Doe
+        email: jane@example.com
+      properties:
+        name:
+          example: Jane Doe
+          title: name
+          type: string
+        email:
+          example: jane@example.com
+          title: email
+          type: string
+      required:
+      - email
+      - name
+      title: NewMember
+      type: object
+    BookBorrowed:
+      example:
+        member_id: 1
+        borrow_date: 2025-10-15 12:00:00
+        id: 5
+        book_id: 2
+        return_date: return_date
+      properties:
+        id:
+          example: 5
+          title: id
+          type: integer
+        member_id:
+          example: 1
+          title: member_id
+          type: integer
+        book_id:
+          example: 2
+          title: book_id
+          type: integer
+        borrow_date:
+          example: 2025-10-15 12:00:00
+          title: borrow_date
+          type: string
+        return_date:
+          nullable: true
+          title: return_date
+          type: string
+          example: null
+      title: BookBorrowed
+      type: object
+    NewBookBorrowed:
+      example:
+        member_id: 1
+        book_id: 2
+      properties:
+        member_id:
+          example: 1
+          title: member_id
+          type: integer
+        book_id:
+          example: 2
+          title: book_id
+          type: integer
+      required:
+      - book_id
+      - member_id
+      title: NewBookBorrowed
+      type: object
+    CursorPagination:
+      example:
+        next_cursor: 15
+        limit: 10
+        has_next: true
+      properties:
+        limit:
+          example: 10
+          title: limit
+          type: integer
+        next_cursor:
+          example: 15
+          nullable: true
+          title: next_cursor
+          type: integer
+        has_next:
+          example: true
+          title: has_next
+          type: boolean
+      title: CursorPagination
+      type: object
+    _api_v1_login_post_request:
+      properties:
+        username:
+          example: admin
+          title: username
+          type: string
+        password:
+          example: "123456"
+          title: password
+          type: string
+      title: _api_v1_login_post_request
+      type: object
+    _api_v1_login_post_200_response_data:
+      example:
+        token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      properties:
+        token:
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+          title: token
+          type: string
+      title: _api_v1_login_post_200_response_data
+      type: object
+    _api_v1_login_post_200_response:
+      example:
+        data:
+          token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      properties:
+        data:
+          $ref: "#/components/schemas/_api_v1_login_post_200_response_data"
+      title: _api_v1_login_post_200_response
+      type: object
+    _api_v1_books_get_200_response_data:
+      example:
+        books:
+        - author: F. Scott Fitzgerald
+          available: true
+          id: 1
+          title: The Great Gatsby
+        - author: F. Scott Fitzgerald
+          available: true
+          id: 1
+          title: The Great Gatsby
+        pagination:
+          next_cursor: 15
+          limit: 10
+          has_next: true
+      properties:
+        books:
+          items:
+            $ref: "#/components/schemas/Book"
+          title: books
+          type: array
+        pagination:
+          $ref: "#/components/schemas/CursorPagination"
+      title: _api_v1_books_get_200_response_data
+      type: object
+    _api_v1_books_get_200_response:
+      example:
+        data:
+          books:
+          - author: F. Scott Fitzgerald
+            available: true
+            id: 1
+            title: The Great Gatsby
+          - author: F. Scott Fitzgerald
+            available: true
+            id: 1
+            title: The Great Gatsby
+          pagination:
+            next_cursor: 15
+            limit: 10
+            has_next: true
+      properties:
+        data:
+          $ref: "#/components/schemas/_api_v1_books_get_200_response_data"
+      title: _api_v1_books_get_200_response
+      type: object
+    _api_v1_members_get_200_response_data:
+      example:
+        pagination:
+          next_cursor: 15
+          limit: 10
+          has_next: true
+        members:
+        - join_date: 2025-10-15 14:30:00
+          name: John Doe
+          id: 1
+          email: john@example.com
+        - join_date: 2025-10-15 14:30:00
+          name: John Doe
+          id: 1
+          email: john@example.com
+      properties:
+        members:
+          items:
+            $ref: "#/components/schemas/Member"
+          title: members
+          type: array
+        pagination:
+          $ref: "#/components/schemas/CursorPagination"
+      title: _api_v1_members_get_200_response_data
+      type: object
+    _api_v1_members_get_200_response:
+      example:
+        data:
+          pagination:
+            next_cursor: 15
+            limit: 10
+            has_next: true
+          members:
+          - join_date: 2025-10-15 14:30:00
+            name: John Doe
+            id: 1
+            email: john@example.com
+          - join_date: 2025-10-15 14:30:00
+            name: John Doe
+            id: 1
+            email: john@example.com
+      properties:
+        data:
+          $ref: "#/components/schemas/_api_v1_members_get_200_response_data"
+      title: _api_v1_members_get_200_response
+      type: object
+    _api_v1_books_borrowed_get_200_response_data:
+      example:
+        pagination:
+          next_cursor: 15
+          limit: 10
+          has_next: true
+        books_borrowed:
+        - member_id: 1
+          borrow_date: 2025-10-15 12:00:00
+          id: 5
+          book_id: 2
+          return_date: return_date
+        - member_id: 1
+          borrow_date: 2025-10-15 12:00:00
+          id: 5
+          book_id: 2
+          return_date: return_date
+      properties:
+        books_borrowed:
+          items:
+            $ref: "#/components/schemas/BookBorrowed"
+          title: books_borrowed
+          type: array
+        pagination:
+          $ref: "#/components/schemas/CursorPagination"
+      title: _api_v1_books_borrowed_get_200_response_data
+      type: object
+    _api_v1_books_borrowed_get_200_response:
+      example:
+        data:
+          pagination:
+            next_cursor: 15
+            limit: 10
+            has_next: true
+          books_borrowed:
+          - member_id: 1
+            borrow_date: 2025-10-15 12:00:00
+            id: 5
+            book_id: 2
+            return_date: return_date
+          - member_id: 1
+            borrow_date: 2025-10-15 12:00:00
+            id: 5
+            book_id: 2
+            return_date: return_date
+      properties:
+        data:
+          $ref: "#/components/schemas/_api_v1_books_borrowed_get_200_response_data"
+      title: _api_v1_books_borrowed_get_200_response
+      type: object
+  securitySchemes:
+    bearerAuth:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
+      x-bearerInfoFunc: openapi_server.controllers.security_controller.info_from_bearerAuth
