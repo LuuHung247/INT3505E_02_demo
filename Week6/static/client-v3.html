@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>JWT Cookie Test</title>
+</head>
+
+<body>
+    <h3>JWT Cookie Test</h3>
+    <input id="username" placeholder="Username" value="admin">
+    <input id="password" placeholder="Password" value="123456">
+    <button onclick="login()">Login</button>
+    <button onclick="getBooks()">Get Books</button>
+
+    <script>
+        async function login() {
+            const res = await fetch('http://localhost:5001/api/v1/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: document.getElementById('username').value,
+                    password: document.getElementById('password').value
+                }),
+                credentials: 'include' // Cho phép gửi & nhận cookie
+            });
+
+            const data = await res.json();
+            alert(data.message);
+        }
+
+        async function getBooks() {
+            const res = await fetch('http://localhost:5001/api/v1/books', {
+                credentials: 'include' // Gửi cookie kèm theo request
+            });
+
+            if (res.status === 401) {
+                alert('Unauthorized: Token missing or expired');
+                return;
+            }
+
+            const data = await res.json();
+            console.log(data);
+            alert(JSON.stringify(data));
+        }
+    </script>
+</body>
+
+</html>
