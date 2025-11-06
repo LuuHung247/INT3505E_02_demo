@@ -22,8 +22,7 @@ Chạy Newman Tests
 
 # hoặc chạy tự động với Newman:
 
-newman run Book_API_Tests.postman_collection.json \
- -e environment.json \
+newman run Book_API_Tests.postman_collection.json -e Book_API_Environment.json \
  --reporters cli,htmlextra \
  --reporter-htmlextra-export ./test-reports/newman-report.html
 

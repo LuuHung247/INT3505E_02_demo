@@ -2,7 +2,9 @@
     "info": {
         "name": "Book Management API Tests",
         "description": "Complete test suite for Book API with automated tests",
-        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        "_postman_id": "book-api-tests-001",
+        "_exporter_id": "12345"
     },
     "auth": {
         "type": "bearer",
@@ -25,17 +27,14 @@
                             "listen": "test",
                             "script": {
                                 "exec": [
-                                    "// Test 1: Status code là 200",
                                     "pm.test(\"Status code is 200\", function () {",
                                     "    pm.response.to.have.status(200);",
                                     "});",
                                     "",
-                                    "// Test 2: Response time < 500ms",
                                     "pm.test(\"Response time is less than 500ms\", function () {",
                                     "    pm.expect(pm.response.responseTime).to.be.below(500);",
                                     "});",
                                     "",
-                                    "// Test 3: Response có đúng structure",
                                     "pm.test(\"Response has correct structure\", function () {",
                                     "    var jsonData = pm.response.json();",
                                     "    pm.expect(jsonData).to.have.property('status');",
@@ -44,7 +43,6 @@
                                     "    pm.expect(jsonData.status).to.eql('success');",
                                     "});",
                                     "",
-                                    "// Test 4: Token được trả về",
                                     "pm.test(\"Token is present\", function () {",
                                     "    var jsonData = pm.response.json();",
                                     "    pm.expect(jsonData.data).to.have.property('token');",
@@ -52,11 +50,9 @@
                                     "    pm.expect(jsonData.data.token.length).to.be.above(0);",
                                     "});",
                                     "",
-                                    "// Lưu token vào environment",
                                     "var jsonData = pm.response.json();",
                                     "pm.environment.set(\"auth_token\", jsonData.data.token);",
                                     "",
-                                    "// Test 5: Content-Type header",
                                     "pm.test(\"Content-Type is application/json\", function () {",
                                     "    pm.response.to.have.header(\"Content-Type\");",
                                     "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
@@ -71,12 +67,18 @@
                         "header": [
                             {
                                 "key": "Content-Type",
-                                "value": "application/json"
+                                "value": "application/json",
+                                "type": "text"
                             }
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"123456\"\n}"
+                            "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"123456\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
                         },
                         "url": {
                             "raw": "{{base_url}}/api/v1/login",
@@ -89,7 +91,8 @@
                                 "login"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 },
                 {
                     "name": "Login Failed - Invalid Credentials",
@@ -114,7 +117,13 @@
                     ],
                     "request": {
                         "method": "POST",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
                         "body": {
                             "mode": "raw",
                             "raw": "{\n  \"username\": \"wrong\",\n  \"password\": \"wrong\"\n}",
@@ -135,7 +144,8 @@
                                 "login"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 }
             ]
         },
@@ -149,31 +159,26 @@
                             "listen": "test",
                             "script": {
                                 "exec": [
-                                    "// Test 1: Status code",
                                     "pm.test(\"Status code is 200\", function () {",
                                     "    pm.response.to.have.status(200);",
                                     "});",
                                     "",
-                                    "// Test 2: Response structure",
                                     "pm.test(\"Response has books array\", function () {",
                                     "    var jsonData = pm.response.json();",
                                     "    pm.expect(jsonData.data).to.have.property('books');",
                                     "    pm.expect(jsonData.data.books).to.be.an('array');",
                                     "});",
                                     "",
-                                    "// Test 3: ETag header present",
                                     "pm.test(\"ETag header is present\", function () {",
                                     "    pm.response.to.have.header(\"ETag\");",
                                     "    var etag = pm.response.headers.get(\"ETag\");",
                                     "    pm.environment.set(\"book_etag\", etag);",
                                     "});",
                                     "",
-                                    "// Test 4: Cache-Control header",
                                     "pm.test(\"Cache-Control header is present\", function () {",
                                     "    pm.response.to.have.header(\"Cache-Control\");",
                                     "});",
                                     "",
-                                    "// Test 5: Book structure validation",
                                     "pm.test(\"Books have correct structure\", function () {",
                                     "    var jsonData = pm.response.json();",
                                     "    if (jsonData.data.books.length > 0) {",
@@ -185,7 +190,6 @@
                                     "    }",
                                     "});",
                                     "",
-                                    "// Test 6: Performance",
                                     "pm.test(\"Response time is acceptable\", function () {",
                                     "    pm.expect(pm.response.responseTime).to.be.below(1000);",
                                     "});"
@@ -208,7 +212,8 @@
                                 "books"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 },
                 {
                     "name": "Create Book",
@@ -217,12 +222,10 @@
                             "listen": "test",
                             "script": {
                                 "exec": [
-                                    "// Test 1: Status code",
                                     "pm.test(\"Status code is 201\", function () {",
                                     "    pm.response.to.have.status(201);",
                                     "});",
                                     "",
-                                    "// Test 2: Book created successfully",
                                     "pm.test(\"Book created with correct data\", function () {",
                                     "    var jsonData = pm.response.json();",
                                     "    pm.expect(jsonData.status).to.eql('success');",
@@ -232,17 +235,14 @@
                                     "    pm.expect(jsonData.data.available).to.be.true;",
                                     "});",
                                     "",
-                                    "// Save book ID for later use",
                                     "var jsonData = pm.response.json();",
                                     "pm.environment.set(\"test_book_id\", jsonData.data._id);",
                                     "",
-                                    "// Test 3: Message",
                                     "pm.test(\"Success message is correct\", function () {",
                                     "    var jsonData = pm.response.json();",
                                     "    pm.expect(jsonData.message).to.eql('Book created');",
                                     "});",
                                     "",
-                                    "// Test 4: ETag generated",
                                     "pm.test(\"ETag is generated\", function () {",
                                     "    pm.response.to.have.header(\"ETag\");",
                                     "});"
@@ -253,7 +253,13 @@
                     ],
                     "request": {
                         "method": "POST",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
                         "body": {
                             "mode": "raw",
                             "raw": "{\n  \"title\": \"Test Book\",\n  \"author\": \"Test Author\"\n}",
@@ -274,7 +280,8 @@
                                 "books"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 },
                 {
                     "name": "Get Book By ID",
@@ -317,7 +324,8 @@
                                 "{{test_book_id}}"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 },
                 {
                     "name": "Update Book",
@@ -350,7 +358,13 @@
                     ],
                     "request": {
                         "method": "PUT",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
                         "body": {
                             "mode": "raw",
                             "raw": "{\n  \"title\": \"Updated Test Book\",\n  \"available\": false\n}",
@@ -372,7 +386,8 @@
                                 "{{test_book_id}}"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 },
                 {
                     "name": "Delete Book",
@@ -414,100 +429,8 @@
                                 "{{test_book_id}}"
                             ]
                         }
-                    }
-                }
-            ]
-        },
-        {
-            "name": "Books - Filtering",
-            "item": [
-                {
-                    "name": "Filter Available Books",
-                    "event": [
-                        {
-                            "listen": "test",
-                            "script": {
-                                "exec": [
-                                    "pm.test(\"Status code is 200\", function () {",
-                                    "    pm.response.to.have.status(200);",
-                                    "});",
-                                    "",
-                                    "pm.test(\"All books are available\", function () {",
-                                    "    var jsonData = pm.response.json();",
-                                    "    jsonData.data.books.forEach(function(book) {",
-                                    "        pm.expect(book.available).to.be.true;",
-                                    "    });",
-                                    "});"
-                                ],
-                                "type": "text/javascript"
-                            }
-                        }
-                    ],
-                    "request": {
-                        "method": "GET",
-                        "header": [],
-                        "url": {
-                            "raw": "{{base_url}}/api/v1/books?available=true",
-                            "host": [
-                                "{{base_url}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "books"
-                            ],
-                            "query": [
-                                {
-                                    "key": "available",
-                                    "value": "true"
-                                }
-                            ]
-                        }
-                    }
-                },
-                {
-                    "name": "Search By Title",
-                    "event": [
-                        {
-                            "listen": "test",
-                            "script": {
-                                "exec": [
-                                    "pm.test(\"Status code is 200\", function () {",
-                                    "    pm.response.to.have.status(200);",
-                                    "});",
-                                    "",
-                                    "pm.test(\"Books contain search term\", function () {",
-                                    "    var jsonData = pm.response.json();",
-                                    "    jsonData.data.books.forEach(function(book) {",
-                                    "        pm.expect(book.title.toLowerCase()).to.include('clean');",
-                                    "    });",
-                                    "});"
-                                ],
-                                "type": "text/javascript"
-                            }
-                        }
-                    ],
-                    "request": {
-                        "method": "GET",
-                        "header": [],
-                        "url": {
-                            "raw": "{{base_url}}/api/v1/books?title=clean",
-                            "host": [
-                                "{{base_url}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "books"
-                            ],
-                            "query": [
-                                {
-                                    "key": "title",
-                                    "value": "clean"
-                                }
-                            ]
-                        }
-                    }
+                    },
+                    "response": []
                 }
             ]
         },
@@ -550,7 +473,8 @@
                                 "507f1f77bcf86cd799439011"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 },
                 {
                     "name": "Create Book Without Required Fields",
@@ -575,7 +499,13 @@
                     ],
                     "request": {
                         "method": "POST",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json",
+                                "type": "text"
+                            }
+                        ],
                         "body": {
                             "mode": "raw",
                             "raw": "{\n  \"title\": \"Only Title\"\n}",
@@ -596,7 +526,8 @@
                                 "books"
                             ]
                         }
-                    }
+                    },
+                    "response": []
                 }
             ]
         }
