@@ -37,15 +37,16 @@ class Book(Document):
     title = StringField(required=True)
     author = StringField(required=True)
     available = BooleanField(default=True)
-
+    year_published = StringField()
     def to_dict(self):
         return {
             "_id": str(self.id),
             "title": self.title,
             "author": self.author,
-            "available": self.available
+            "available": self.available,
+            "year_published": self.year_published
         }
-
+        
 # ------------------ Helper functions ------------------
 def generate_etag(data_dict):
     data_str = json.dumps(data_dict, sort_keys=True, default=str)
