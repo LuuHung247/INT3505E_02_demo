@@ -26,12 +26,6 @@ newman run Book_API_Tests.postman_collection.json -e Book_API_Environment.json \
  --reporters cli,htmlextra \
  --reporter-htmlextra-export ./test-reports/newman-report.html
 
-# Hoặc dùng script JavaScript
-
-node run_newman_tests.js
-
-Chạy Performance Tests
-
 # Chạy Locust với Web UI
 
 locust -f locustfile.py --host=http://localhost:5001

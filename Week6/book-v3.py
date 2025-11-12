@@ -38,8 +38,8 @@ COGNITO_USER_POOL_ID = os.getenv('COGNITO_USER_POOL_ID')
 COGNITO_CLIENT_ID = os.getenv('COGNITO_CLIENT_ID')
 COGNITO_CLIENT_SECRET = os.getenv('COGNITO_CLIENT_SECRET') or None
 COGNITO_DOMAIN = os.getenv('COGNITO_DOMAIN')
-COGNITO_REDIRECT_URI = os.getenv('COGNITO_REDIRECT_URI', 'http://localhost:5001/callback')
-COGNITO_LOGOUT_REDIRECT_URI = os.getenv('COGNITO_LOGOUT_REDIRECT_URI', 'http://localhost:5001/')
+COGNITO_REDIRECT_URI = os.getenv('COGNITO_REDIRECT_URI', 'http://localhost:5002/callback')
+COGNITO_LOGOUT_REDIRECT_URI = os.getenv('COGNITO_LOGOUT_REDIRECT_URI', 'http://localhost:5002/')
 
 COGNITO_ISSUER = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}"
 COGNITO_OIDC_CONF = f"{COGNITO_ISSUER}/.well-known/openid-configuration"
@@ -593,4 +593,4 @@ def home():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5002)
