@@ -1,0 +1,626 @@
+openapi: 3.0.0
+info:
+  title: Book Management API
+  description: |
+    RESTful API với nhiều design patterns:
+    - **CRUD**: Create, Read, Update, Delete books
+    - **Query Pattern**: Filtering, sorting, pagination, search
+    - **HATEOAS**: Hypermedia links for navigation
+    - **Event-Driven**: Real-time events và webhooks
+    - **Webhook Pattern**: Subscribe to events
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@bookapi.com
+
+servers:
+  - url: http://localhost:5001/api/v1
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: Login và token management
+  - name: Books CRUD
+    description: Basic CRUD operations
+  - name: Books Query
+    description: Advanced query và search
+  - name: Books Actions
+    description: Business logic (borrow, return)
+  - name: Webhooks
+    description: Webhook management
+  - name: Events
+    description: Event stream và history
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Book:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        title:
+          type: string
+          example: "Clean Code"
+        author:
+          type: string
+          example: "Robert C. Martin"
+        isbn:
+          type: string
+          example: "978-0132350884"
+        published_year:
+          type: integer
+          example: 2008
+        available:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        _links:
+          type: object
+          description: HATEOAS links
+          properties:
+            self:
+              type: object
+            update:
+              type: object
+            delete:
+              type: object
+            borrow:
+              type: object
+            return:
+              type: object
+
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "error"
+        data:
+          type: object
+          nullable: true
+        message:
+          type: string
+          example: "Error message"
+
+    Event:
+      type: object
+      properties:
+        event_id:
+          type: string
+        event_type:
+          type: string
+          enum:
+            [
+              book.created,
+              book.updated,
+              book.deleted,
+              book.borrowed,
+              book.returned,
+            ]
+        data:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+
+    Webhook:
+      type: object
+      properties:
+        _id:
+          type: string
+        url:
+          type: string
+          format: uri
+        event_type:
+          type: string
+        user:
+          type: string
+        active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+paths:
+  /:
+    get:
+      summary: API Root (HATEOAS)
+      description: Get all available endpoints with HATEOAS links
+      tags:
+        - Authentication
+      responses:
+        "200":
+          description: Success
+
+  /login:
+    post:
+      summary: Login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  example: "123456"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+        "401":
+          description: Invalid credentials
+
+  /books:
+    get:
+      summary: Get Books (Query Pattern)
+      description: |
+        Advanced query with:
+        - Filtering (available, title, author)
+        - Sorting (sort_by, sort_order)
+        - Pagination (page, per_page)
+        - HATEOAS links in response
+      tags:
+        - Books Query
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: available
+          in: query
+          schema:
+            type: boolean
+        - name: title
+          in: query
+          schema:
+            type: string
+        - name: author
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [title, author, published_year]
+            default: title
+        - name: sort_order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        "200":
+          description: Books fetched successfully
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      books:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Book"
+                      pagination:
+                        type: object
+                        properties:
+                          page:
+                            type: integer
+                          per_page:
+                            type: integer
+                          total:
+                            type: integer
+                          total_pages:
+                            type: integer
+                  _links:
+                    type: object
+                    description: Pagination links
+
+    post:
+      summary: Create Book
+      tags:
+        - Books CRUD
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - author
+              properties:
+                title:
+                  type: string
+                author:
+                  type: string
+                isbn:
+                  type: string
+                published_year:
+                  type: integer
+      responses:
+        "201":
+          description: Book created (triggers book.created event)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Book"
+
+  /books/{book_id}:
+    get:
+      summary: Get Book by ID
+      tags:
+        - Books CRUD
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: If-None-Match
+          in: header
+          schema:
+            type: string
+          description: ETag for conditional request
+      responses:
+        "200":
+          description: Book found
+          headers:
+            ETag:
+              schema:
+                type: string
+        "304":
+          description: Not Modified (ETag match)
+        "404":
+          description: Book not found
+
+    put:
+      summary: Update Book
+      tags:
+        - Books CRUD
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                author:
+                  type: string
+                isbn:
+                  type: string
+                published_year:
+                  type: integer
+                available:
+                  type: boolean
+      responses:
+        "200":
+          description: Book updated (triggers book.updated event)
+        "404":
+          description: Book not found
+
+    delete:
+      summary: Delete Book
+      tags:
+        - Books CRUD
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Book deleted (triggers book.deleted event)
+        "404":
+          description: Book not found
+
+  /books/{book_id}/borrow:
+    post:
+      summary: Borrow Book
+      description: Business action that publishes book.borrowed event
+      tags:
+        - Books Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Book borrowed successfully
+        "400":
+          description: Book not available
+        "404":
+          description: Book not found
+
+  /books/{book_id}/return:
+    post:
+      summary: Return Book
+      description: Business action that publishes book.returned event
+      tags:
+        - Books Actions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: book_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Book returned successfully
+        "400":
+          description: Book was not borrowed
+        "404":
+          description: Book not found
+
+  /books/search:
+    get:
+      summary: Advanced Search
+      description: Full-text search across title, author, ISBN
+      tags:
+        - Books Query
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query
+        - name: min_year
+          in: query
+          schema:
+            type: integer
+        - name: max_year
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Search results
+
+  /books/stats:
+    get:
+      summary: Get Statistics
+      description: Aggregation query for book statistics
+      tags:
+        - Books Query
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Statistics retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      total_books:
+                        type: integer
+                      available_books:
+                        type: integer
+                      borrowed_books:
+                        type: integer
+                      top_authors:
+                        type: array
+
+  /webhooks:
+    post:
+      summary: Register Webhook
+      description: Subscribe to events via webhook
+      tags:
+        - Webhooks
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+                - event_type
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://myapp.com/webhook"
+                event_type:
+                  type: string
+                  enum:
+                    [
+                      book.created,
+                      book.updated,
+                      book.deleted,
+                      book.borrowed,
+                      book.returned,
+                    ]
+                  example: "book.created"
+      responses:
+        "201":
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Webhook"
+
+    get:
+      summary: List Webhooks
+      tags:
+        - Webhooks
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      webhooks:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Webhook"
+
+  /webhooks/{webhook_id}:
+    delete:
+      summary: Delete Webhook
+      tags:
+        - Webhooks
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: webhook_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Webhook deleted
+        "404":
+          description: Webhook not found
+
+  /events:
+    get:
+      summary: Get Event History
+      tags:
+        - Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: event_type
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Event history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      events:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Event"
+                      count:
+                        type: integer
+
+  /events/stream:
+    get:
+      summary: Server-Sent Events Stream
+      description: Real-time event stream (SSE)
+      tags:
+        - Events
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: last_event_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
