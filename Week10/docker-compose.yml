@@ -18,17 +18,49 @@ services:
       timeout: 5s
       retries: 5
 
+  # ----------- Jaeger (Tracing) với OTLP -----------
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "5775:5775/udp"    # Zipkin compact
+      - "6831:6831/udp"    # Jaeger compact (legacy)
+      - "6832:6832/udp"    # Jaeger binary (legacy)
+      - "5778:5778"        # Jaeger configs
+      - "16686:16686"      # Jaeger UI
+      - "14268:14268"      # Jaeger collector HTTP
+      - "14250:14250"      # Jaeger gRPC (legacy)
+      - "4317:4317"        # OTLP gRPC (NEW - IMPORTANT!)
+      - "4318:4318"        # OTLP HTTP (NEW)
+      - "9411:9411"        # Zipkin
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped
+
   # ----------- Flask API -----------
   book_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: book_api:latest
     container_name: book_api
     ports:
       - "5003:5003"
     env_file:
       - .env
+    environment:
+      # OTLP Configuration (NEW - replaces Jaeger agent)
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - ENVIRONMENT=development
+      # Legacy Jaeger config (not needed with OTLP, keeping for reference)
+      # - JAEGER_AGENT_HOST=jaeger
+      # - JAEGER_AGENT_PORT=6831
     depends_on:
       mongodb:
         condition: service_healthy
+      jaeger:
+        condition: service_started
     restart: unless-stopped
 
   # ----------- Prometheus -----------
@@ -58,12 +90,16 @@ services:
 
   # ----------- Grafana -----------
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:latest
     container_name: grafana
     ports:
       - "3000:3000"
     volumes:
+      - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
     restart: unless-stopped
 
   # ----------- Node Exporter -----------
@@ -106,20 +142,22 @@ services:
   promtail:
     image: grafana/promtail:2.9.0
     container_name: promtail
+    user: root
     ports:
       - "9080:9080"
-    restart: unless-stopped
     volumes:
-      - /var/log:/var/log
+      - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - ./loki/promtail-config.yml:/etc/promtail/promtail-config.yml
     command: -config.file=/etc/promtail/promtail-config.yml
+    restart: unless-stopped
     depends_on:
       loki:
         condition: service_healthy
 
-# Định nghĩa volumes
 volumes:
   mongodb_data:
+    driver: local
+  grafana_data:
     driver: local
